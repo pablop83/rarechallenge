@@ -30,11 +30,110 @@ export function gridDims(longSide: number, aspect: number): [number, number] {
     : [Math.max(4, Math.round(longSide * aspect)), longSide]
 }
 
-export class ImageSource {
+/**
+ * Lo que el motor necesita de un origen, sea una foto o el cuadro actual de un
+ * video. compose() sólo ve esto, así que convertir video es exactamente el
+ * mismo camino que convertir una imagen — con distorsión, máscara y simetría
+ * incluidas.
+ */
+export interface Source {
   readonly name: string
   readonly width: number
   readonly height: number
   readonly aspect: number
+  readonly isVideo: boolean
+  sample(gw: number, gh: number, fit?: Fit): SampledImage
+  dispose(): void
+}
+
+/**
+ * Muestrea cualquier cosa dibujable a la grilla y extrae las tres señales.
+ * La comparten la imagen y el video: el cuadro de un video no es otra cosa que
+ * una imagen, y duplicar esto sería duplicar el manejo de alfa y de bordes.
+ */
+export function sampleDrawable(
+  drawable: CanvasImageSource,
+  iw: number,
+  ih: number,
+  gw: number,
+  gh: number,
+  fit: Fit,
+): SampledImage {
+  const canvas = document.createElement('canvas')
+  canvas.width = gw
+  canvas.height = gh
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+
+  // Escalar por el eje que corresponda y centrar, en vez de estirar a la
+  // grilla: si el lienzo tiene otra proporción que el origen, dibujarlo a
+  // gw×gh lo deformaría. `cover` llena recortando lo que sobra; `contain`
+  // entra entero y lo que queda alrededor es transparente, o sea papel.
+  const s = fit === 'cover' ? Math.max(gw / iw, gh / ih) : Math.min(gw / iw, gh / ih)
+  const dw = iw * s
+  const dh = ih * s
+  ctx.drawImage(drawable, (gw - dw) / 2, (gh - dh) / 2, dw, dh)
+
+  const n = gw * gh
+  const alpha = new Float32Array(n)
+  const transparent = ctx.getImageData(0, 0, gw, gh).data
+  for (let i = 0; i < n; i++) alpha[i] = transparent[i * 4 + 3] / 255
+
+  // Segunda lectura con blanco por debajo. Un PNG recortado guarda RGB (0,0,0)
+  // donde es transparente, así que leer la luminancia en crudo interpreta el
+  // fondo vacío como negro —o sea tinta máxima— y la composición sale sembrada
+  // de módulos donde no había nada. Componerlo sobre blanco da el tono que uno
+  // ve al abrir el archivo.
+  ctx.globalCompositeOperation = 'destination-over'
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, gw, gh)
+  ctx.globalCompositeOperation = 'source-over'
+
+  const raw = ctx.getImageData(0, 0, gw, gh)
+  const lum = new Float32Array(n)
+  const color = new Uint32Array(n)
+  color.set(new Uint32Array(raw.data.buffer))
+
+  const d = raw.data
+  for (let i = 0; i < n; i++) {
+    const o = i * 4
+    // Coeficientes de luminancia Rec. 709: el verde pesa diez veces más que el
+    // azul, así que un umbral sobre el promedio plano rompería el tono.
+    lum[i] = (0.2126 * d[o] + 0.7152 * d[o + 1] + 0.0722 * d[o + 2]) / 255
+  }
+
+  // Sobel sobre el mapa ya reducido. Calcularlo a resolución completa daría
+  // detalle que la grilla no puede representar: lo que importa son los bordes
+  // que sobreviven al downsampling, que son los que se van a poder dibujar.
+  const edge = new Float32Array(n)
+  let maxG = 0
+  for (let y = 1; y < gh - 1; y++) {
+    for (let x = 1; x < gw - 1; x++) {
+      const i = y * gw + x
+      const tl = lum[i - gw - 1], tc = lum[i - gw], tr = lum[i - gw + 1]
+      const ml = lum[i - 1], mr = lum[i + 1]
+      const bl = lum[i + gw - 1], bc = lum[i + gw], br = lum[i + gw + 1]
+      const gx = tr + 2 * mr + br - (tl + 2 * ml + bl)
+      const gy = bl + 2 * bc + br - (tl + 2 * tc + tr)
+      const g = Math.sqrt(gx * gx + gy * gy)
+      edge[i] = g
+      if (g > maxG) maxG = g
+    }
+  }
+  if (maxG > 0) {
+    for (let i = 0; i < n; i++) edge[i] /= maxG
+  }
+
+  return { gw, gh, lum, edge, color, alpha }
+}
+
+export class ImageSource implements Source {
+  readonly name: string
+  readonly width: number
+  readonly height: number
+  readonly aspect: number
+  readonly isVideo = false
 
   private bitmap: ImageBitmap
   private cache: SampledImage | null = null
@@ -59,77 +158,7 @@ export class ImageSource {
     if (this.cache && this.cache.gw === gw && this.cache.gh === gh && this.cacheFit === fit) {
       return this.cache
     }
-
-    const canvas = document.createElement('canvas')
-    canvas.width = gw
-    canvas.height = gh
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })!
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = 'high'
-
-    // Escalar por el eje que corresponda y centrar, en vez de estirar a la
-    // grilla: si el lienzo tiene otra proporción que la foto, dibujarla a
-    // gw×gh la deformaría. `cover` llena recortando lo que sobra; `contain`
-    // entra entera y lo que queda alrededor es transparente, o sea papel.
-    const iw = this.bitmap.width
-    const ih = this.bitmap.height
-    const s =
-      fit === 'cover' ? Math.max(gw / iw, gh / ih) : Math.min(gw / iw, gh / ih)
-    const dw = iw * s
-    const dh = ih * s
-    ctx.drawImage(this.bitmap, (gw - dw) / 2, (gh - dh) / 2, dw, dh)
-
-    const n = gw * gh
-    const alpha = new Float32Array(n)
-    const transparent = ctx.getImageData(0, 0, gw, gh).data
-    for (let i = 0; i < n; i++) alpha[i] = transparent[i * 4 + 3] / 255
-
-    // Segunda lectura con blanco por debajo. Un PNG recortado guarda RGB (0,0,0)
-    // donde es transparente, así que leer la luminancia en crudo interpreta el
-    // fondo vacío como negro — o sea tinta máxima — y la composición sale
-    // sembrada de módulos donde no había nada. Componerlo sobre blanco da el
-    // tono que uno ve al abrir el archivo.
-    ctx.globalCompositeOperation = 'destination-over'
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, gw, gh)
-    ctx.globalCompositeOperation = 'source-over'
-
-    const raw = ctx.getImageData(0, 0, gw, gh)
-    const lum = new Float32Array(n)
-    const color = new Uint32Array(n)
-    color.set(new Uint32Array(raw.data.buffer))
-
-    const d = raw.data
-    for (let i = 0; i < n; i++) {
-      const o = i * 4
-      // Coeficientes de luminancia Rec. 709: el verde pesa diez veces más que
-      // el azul, así que un umbral sobre el promedio plano rompería el tono.
-      lum[i] = (0.2126 * d[o] + 0.7152 * d[o + 1] + 0.0722 * d[o + 2]) / 255
-    }
-
-    // Sobel sobre el mapa ya reducido. Calcularlo a resolución completa daría
-    // detalle que la grilla no puede representar: lo que importa son los bordes
-    // que sobreviven al downsampling, que son los que se van a poder dibujar.
-    const edge = new Float32Array(n)
-    let maxG = 0
-    for (let y = 1; y < gh - 1; y++) {
-      for (let x = 1; x < gw - 1; x++) {
-        const i = y * gw + x
-        const tl = lum[i - gw - 1], tc = lum[i - gw], tr = lum[i - gw + 1]
-        const ml = lum[i - 1], mr = lum[i + 1]
-        const bl = lum[i + gw - 1], bc = lum[i + gw], br = lum[i + gw + 1]
-        const gx = tr + 2 * mr + br - (tl + 2 * ml + bl)
-        const gy = bl + 2 * bc + br - (tl + 2 * tc + tr)
-        const g = Math.sqrt(gx * gx + gy * gy)
-        edge[i] = g
-        if (g > maxG) maxG = g
-      }
-    }
-    if (maxG > 0) {
-      for (let i = 0; i < n; i++) edge[i] /= maxG
-    }
-
-    this.cache = { gw, gh, lum, edge, color, alpha }
+    this.cache = sampleDrawable(this.bitmap, this.bitmap.width, this.bitmap.height, gw, gh, fit)
     this.cacheFit = fit
     return this.cache
   }

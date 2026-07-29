@@ -101,6 +101,48 @@ checkbox para incluirlos si lo que querés es marcar una composición concreta.
 
 Ningún preset guarda la imagen: son parámetros, no archivos.
 
+## Convertir un video
+
+Arrastrá un video igual que una imagen. Para el motor es la misma fuente —le pide "el cuadro de
+ahora"— así que admite distorsión, máscara, simetría y presets exactamente igual.
+
+Con el video reproduciéndose el preview se recompone en cada cuadro, saltando los que hagan falta si
+componer tarda más; el export no depende de eso. Los sliders de entrada y salida acotan el tramo.
+
+### Qué codec conviene
+
+Medido sobre el peor caso de este motor —damero de 1px y bordes de color saturado—, como error medio
+por píxel donde 0 es idéntico al original:
+
+| Contenido | VP9 | H.264 | AV1 |
+|---|---|---|---|
+| Damero 1px | 33.9 | 34.3 | 34.0 |
+| Damero 2px | **1.5** | 26.1 | 25.5 |
+| Bloques planos | **1.0** | 2.6 | — |
+
+VP9 gana por un margen enorme: 17× menos error que H.264 y AV1 en trama fina, y la mitad de tamaño de
+archivo. H.264 está sólo por compatibilidad. AV1, pese a ser el más moderno, se comporta como H.264
+aquí — vía navegador ninguno expone 4:4:4 y el submuestreo de croma se come los bordes de color.
+
+**A 1px por subcelda no sobrevive ninguno.** Los tres dan el mismo error y la trama se vuelve gris:
+un damero de 1px es la frecuencia máxima representable y con croma 4:2:0 no hay forma de codificarlo.
+No es un problema de codec sino de resolución, y por eso el panel marca con ⚠ las resoluciones que
+dejan la subcelda por debajo de 2px. Se arregla exportando más grande, no cambiando de formato.
+
+### Por qué hay un muxer propio
+
+`MediaRecorder` marca cada cuadro con el reloj de pared: si componer un cuadro tarda 100ms, el video
+sale en cámara lenta. Medido, 20 cuadros que tardaron 3.08s en renderizar producían un video de
+2.93s en vez de 0.67s.
+
+WebCodecs sí deja fijar el timestamp de cada cuadro, pero entrega paquetes sueltos que alguien tiene
+que envolver — eso es `webm.ts`, un muxer EBML mínimo. Con él el export es cuadro a cuadro de verdad:
+componer puede tardar lo que necesite y la duración sale exacta. Verificado renderizando 2.46s de
+trabajo para producir 1.00s de video.
+
+MP4 no tiene esa salida y va por `MediaRecorder` en tiempo real, así que si el render no llega a los
+fps pedidos el video se alarga — en la prueba, 1.22s para un tramo de 1.00s. El panel lo avisa.
+
 ## Convertir una imagen
 
 Arrastrala al lienzo, pegala con ⌘V o cargala desde el panel. Todo pasa en el navegador: la imagen
@@ -143,8 +185,9 @@ la misma, sólo cambia cuántos píxeles mide cada subcelda. Opcionalmente con f
 ```
 src/
   engine/   modules (las 4 máscaras y la rampa) · fields · noise · symmetry
-            distort · mask · palette · source (imagen) · compose (el cerebro)
-            raster · exporter
+            distort · mask · palette · compose (el cerebro) · raster
+            source (imagen) · videoSource · exporter (PNG)
+            videoExport · webm (muxer propio)
   state/    parámetros y valores por defecto · presets
   ui/       viewport y panel de controles
 tiles/      los PNG originales, como referencia

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { compose } from '../engine/compose'
 import { rasterize } from '../engine/raster'
-import type { ImageSource } from '../engine/source'
+import type { Source } from '../engine/source'
+import { VideoSource } from '../engine/videoSource'
 import type { Params } from '../state/params'
 
 /**
@@ -9,6 +10,10 @@ import type { Params } from '../state/params'
  * vecino más cercano. Con zoom entero cada subcelda mide exactamente lo mismo;
  * con un factor fraccionario unas medirían 2px y otras 3, y la trama —que es
  * todo el punto de esto— se vería irregular.
+ *
+ * Con un video reproduciéndose se recompone en cada cuadro. Si componer tarda
+ * más que un cuadro se saltan los que hagan falta: el preview prioriza ver el
+ * movimiento, y el export —que sí es cuadro a cuadro— no depende de esto.
  */
 export function Viewport({
   params,
@@ -16,7 +21,7 @@ export function Viewport({
   onDrop,
 }: {
   params: Params
-  source: ImageSource | null
+  source: Source | null
   onDrop: (file: File) => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -24,6 +29,12 @@ export function Viewport({
   const [box, setBox] = useState({ w: 900, h: 900 })
   const [info, setInfo] = useState({ ms: 0, w: 0, h: 0 })
   const [over, setOver] = useState(false)
+
+  // El bucle de video lee de acá para no recrear la suscripción en cada cambio.
+  const paramsRef = useRef(params)
+  paramsRef.current = params
+  const boxRef2 = useRef(box)
+  boxRef2.current = box
 
   useEffect(() => {
     const el = boxRef.current
@@ -36,22 +47,25 @@ export function Viewport({
     return () => ro.disconnect()
   }, [])
 
-  useEffect(() => {
+  const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     const t0 = performance.now()
-    const grid = compose(params, source)
+    const grid = compose(paramsRef.current, source)
     const bm = rasterize(grid, 1)
 
-    const zoom = Math.max(1, Math.floor(Math.min(box.w / bm.w, box.h / bm.h)))
+    const b = boxRef2.current
+    const zoom = Math.max(1, Math.floor(Math.min(b.w / bm.w, b.h / bm.h)))
     const outW = bm.w * zoom
     const outH = bm.h * zoom
 
-    canvas.width = outW
-    canvas.height = outH
-    canvas.style.width = `${outW}px`
-    canvas.style.height = `${outH}px`
+    if (canvas.width !== outW || canvas.height !== outH) {
+      canvas.width = outW
+      canvas.height = outH
+      canvas.style.width = `${outW}px`
+      canvas.style.height = `${outH}px`
+    }
 
     const ctx = canvas.getContext('2d')!
     ctx.imageSmoothingEnabled = false
@@ -64,21 +78,33 @@ export function Viewport({
     } else {
       // putImageData ignora las transformaciones, así que el escalado entero
       // pasa por un canvas intermedio.
-      const src = document.createElement('canvas')
-      src.width = bm.w
-      src.height = bm.h
-      src.getContext('2d')!.putImageData(img, 0, 0)
-      ctx.drawImage(src, 0, 0, outW, outH)
+      const tmp = document.createElement('canvas')
+      tmp.width = bm.w
+      tmp.height = bm.h
+      tmp.getContext('2d')!.putImageData(img, 0, 0)
+      ctx.drawImage(tmp, 0, 0, outW, outH)
     }
 
     setInfo({ ms: performance.now() - t0, w: grid.w, h: grid.h })
-  }, [params, source, box])
+  }, [source])
+
+  useEffect(() => {
+    draw()
+  }, [draw, params, box])
+
+  // Con video, recomponer en cada cuadro nuevo.
+  useEffect(() => {
+    if (!(source instanceof VideoSource)) return
+    return source.onFrame(() => draw())
+  }, [source, draw])
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setOver(false)
     const file = e.dataTransfer.files[0]
-    if (file?.type.startsWith('image/')) onDrop(file)
+    if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
+      onDrop(file)
+    }
   }
 
   return (
@@ -97,7 +123,7 @@ export function Viewport({
         {info.w}×{info.h} · {(info.w * info.h).toLocaleString('es')} celdas
         {source ? ` · ${source.name}` : ''} · {info.ms.toFixed(0)} ms
       </div>
-      {!source && <div className="hint">Arrastrá una imagen, o pegala con ⌘V</div>}
+      {!source && <div className="hint">Arrastrá una imagen o un video, o pegá con ⌘V</div>}
     </div>
   )
 }

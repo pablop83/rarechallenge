@@ -7,7 +7,7 @@
 
 import { compose, gridFor } from './compose'
 import { rasterize, toCanvas } from './raster'
-import type { ImageSource } from './source'
+import type { Source } from './source'
 import type { Params } from '../state/params'
 
 /** Los canvas tienen límite de lado y de área; nos quedamos cómodos por debajo. */
@@ -30,7 +30,7 @@ export function exportOptions(
 
 export async function exportPNG(
   p: Params,
-  src: ImageSource | null,
+  src: Source | null,
   px: number,
   transparent: boolean,
 ): Promise<void> {

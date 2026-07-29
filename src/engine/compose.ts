@@ -29,7 +29,7 @@ import {
   PALETTES,
   type ColorCtx,
 } from './palette'
-import { gridDims, type ImageSource } from './source'
+import { gridDims, type Source } from './source'
 import { resolveAspect, type Params } from '../state/params'
 
 /**
@@ -72,7 +72,7 @@ export function gridFor(p: Params, src: { aspect: number } | null): [number, num
   return [Math.max(m, Math.floor(w / m) * m), Math.max(m, Math.floor(h / m) * m)]
 }
 
-export function compose(p: Params, src: ImageSource | null = null): Grid {
+export function compose(p: Params, src: Source | null = null): Grid {
   const [W, H] = gridFor(p, src)
   const N = W * H
   const seed = seedFromString(p.seed)
