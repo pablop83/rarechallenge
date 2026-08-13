@@ -186,6 +186,41 @@ input[type='color'] {
   background: none;
 }
 
+.palette-editor {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.swatch-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.swatch-grid .swatch {
+  flex: 1 1 64px;
+}
+
+.swatch-head {
+  justify-content: space-between;
+}
+
+.swatch-remove {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  color: var(--dim);
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.swatch-remove:hover {
+  color: var(--accent);
+  border: none;
+}
+
 .check {
   display: flex;
   align-items: center;

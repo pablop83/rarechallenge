@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULTS, ASPECT_LABELS, type Params, type Fit } from './state/params'
 import {
   BUILTIN,
@@ -12,6 +12,7 @@ import {
 } from './state/presets'
 import { Viewport } from './ui/Viewport'
 import { Group, Slider, Select, TextField, Check } from './ui/controls'
+import { PaletteEditor } from './ui/PaletteEditor'
 import { PALETTES } from './engine/palette'
 import { exportOptions, exportPNG } from './engine/exporter'
 import { ImageSource, type Source } from './engine/source'
@@ -72,14 +73,19 @@ const COLOR_MODES = [
   ['noise', 'Ruido'],
 ] as const
 
-const PALETTE_OPTS = Object.entries(PALETTES).map(
-  ([k, v]) => [k, v.name] as [string, string],
-)
-
 export default function App() {
   const [p, setP] = useState<Params>(DEFAULTS)
   const [source, setSource] = useState<Source | null>(null)
   const video = source instanceof VideoSource ? source : null
+
+  // PALETTES se edita in-place (no es estado de React), así que este contador
+  // fuerza a releer sus entradas y a recomponer el lienzo tras cada edición.
+  const [paletteRev, setPaletteRev] = useState(0)
+  const touchPalettes = useCallback(() => setPaletteRev((r) => r + 1), [])
+  const PALETTE_OPTS = useMemo(
+    () => Object.entries(PALETTES).map(([k, v]) => [k, v.name] as [string, string]),
+    [paletteRev],
+  )
 
   const [vFormat, setVFormat] = useState<VideoFormat>('webm')
   const [vFps, setVFps] = useState<30 | 60>(30)
@@ -248,6 +254,7 @@ export default function App() {
         params={deferred}
         source={source}
         onDrop={(f) => loadSource(f, f.name)}
+        redrawKey={paletteRev}
       />
 
       <aside className="panel">
@@ -506,6 +513,11 @@ export default function App() {
               <Select label="Paleta" value={p.palette} options={PALETTE_OPTS} onChange={set('palette')} />
               <Slider label="Escala de color" value={p.colorScale} min={0.5} max={16} step={0.1} onChange={set('colorScale')} />
               <Slider label="Agrupamiento" value={p.colorClustering} min={0} max={1} onChange={set('colorClustering')} />
+              <PaletteEditor
+                paletteKey={p.palette}
+                onSelect={set('palette')}
+                onChange={touchPalettes}
+              />
             </>
           )}
         </Group>

@@ -19,10 +19,13 @@ export function Viewport({
   params,
   source,
   onDrop,
+  redrawKey,
 }: {
   params: Params
   source: Source | null
   onDrop: (file: File) => void
+  /** Cambia cuando algo fuera de `params` (p.ej. una paleta editada) exige recomponer. */
+  redrawKey?: number
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -90,7 +93,7 @@ export function Viewport({
 
   useEffect(() => {
     draw()
-  }, [draw, params, box])
+  }, [draw, params, box, redrawKey])
 
   // Con video, recomponer en cada cuadro nuevo.
   useEffect(() => {

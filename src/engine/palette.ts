@@ -35,7 +35,7 @@ export interface Palette {
  * las formas blancas no están impresas — son el papel que asoma donde no hay
  * módulo, y de eso ya se encarga el extremo vacío de la rampa de densidad.
  */
-export const PALETTES: Record<string, Palette> = {
+const DEFAULT_PALETTES: Record<string, Palette> = {
   iaac: {
     name: 'IAAC 2026',
     paper: '#ffffff',
@@ -68,7 +68,112 @@ export const PALETTES: Record<string, Palette> = {
   },
 }
 
+const STORAGE_KEY = 'pixelator.palettes.v1'
+
+function clonePalette(p: Palette): Palette {
+  return { name: p.name, paper: p.paper, colors: [...p.colors] }
+}
+
+function loadStoredPalettes(): Record<string, Palette> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return typeof parsed === 'object' && parsed !== null ? parsed : {}
+  } catch {
+    // Un localStorage corrupto no debería impedir abrir la app.
+    return {}
+  }
+}
+
+/**
+ * Paletas en memoria: arrancan de las de fábrica y se les pisan encima las
+ * ediciones guardadas del navegador. Se mutan in-place (no se reemplaza el
+ * objeto) para que todo el código que ya tiene la referencia —acá y en
+ * compose.ts— vea los cambios sin re-importar nada.
+ */
+export const PALETTES: Record<string, Palette> = {}
+for (const [k, v] of Object.entries(DEFAULT_PALETTES)) PALETTES[k] = clonePalette(v)
+for (const [k, v] of Object.entries(loadStoredPalettes())) PALETTES[k] = clonePalette(v)
+
+function persistPalettes(): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(PALETTES))
+  } catch {
+    // Privado/cuota llena: la edición sigue funcionando en memoria.
+  }
+}
+
+function slugify(s: string): string {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+export function isBuiltinPalette(key: string): boolean {
+  return key in DEFAULT_PALETTES
+}
+
 const cache = new Map<string, Uint32Array>()
+
+export function updatePalette(key: string, patch: Partial<Palette>): void {
+  const cur = PALETTES[key] ?? { name: key, paper: '#ffffff', colors: ['#000000'] }
+  PALETTES[key] = { ...cur, ...patch }
+  cache.delete(key)
+  persistPalettes()
+}
+
+export function setPaletteColor(key: string, index: number, hex: string): void {
+  const cur = PALETTES[key]
+  if (!cur) return
+  const colors = [...cur.colors]
+  colors[index] = hex
+  PALETTES[key] = { ...cur, colors }
+  cache.delete(key)
+  persistPalettes()
+}
+
+export function addPaletteColor(key: string, hex = '#888888'): void {
+  const cur = PALETTES[key]
+  if (!cur) return
+  PALETTES[key] = { ...cur, colors: [...cur.colors, hex] }
+  cache.delete(key)
+  persistPalettes()
+}
+
+export function removePaletteColor(key: string, index: number): void {
+  const cur = PALETTES[key]
+  if (!cur || cur.colors.length <= 1) return
+  PALETTES[key] = { ...cur, colors: cur.colors.filter((_, i) => i !== index) }
+  cache.delete(key)
+  persistPalettes()
+}
+
+/** Copia una paleta bajo una clave nueva y devuelve esa clave. */
+export function duplicatePalette(sourceKey: string, newName: string): string {
+  const src = PALETTES[sourceKey] ?? PALETTES.mono
+  const base = slugify(newName) || 'paleta'
+  let key = base
+  let n = 1
+  while (PALETTES[key]) key = `${base}-${++n}`
+  PALETTES[key] = { name: newName || key, paper: src.paper, colors: [...src.colors] }
+  persistPalettes()
+  return key
+}
+
+/** Sólo borra paletas que el usuario agregó: las de fábrica se restablecen, no se borran. */
+export function deleteCustomPalette(key: string): void {
+  if (isBuiltinPalette(key)) return
+  delete PALETTES[key]
+  cache.delete(key)
+  persistPalettes()
+}
+
+export function resetPaletteToDefault(key: string): void {
+  const def = DEFAULT_PALETTES[key]
+  if (!def) return
+  PALETTES[key] = clonePalette(def)
+  cache.delete(key)
+  persistPalettes()
+}
 
 export function paletteColors(key: string): Uint32Array {
   const hit = cache.get(key)
