@@ -1,3 +1,5 @@
+import type { ModuleKey } from '../engine/modules'
+
 export type Generator = 'noise' | 'ridged' | 'distance' | 'flow' | 'voronoi'
 export type Symmetry =
   | 'none'
@@ -56,6 +58,9 @@ export interface Params {
   octaves: number
   attractors: number
 
+  /** Siluetas del alfabeto que se pueden usar. El vacío siempre está. */
+  modules: ModuleKey[]
+
   density: number
   contrast: number
   hardness: number
@@ -106,6 +111,10 @@ export const DEFAULTS: Params = {
   fieldScale: 2.5,
   octaves: 3,
   attractors: 3,
+
+  // Las tres de la versión original. Triángulo y círculo quedan a mano pero
+  // apagados: sumarlos por defecto cambiaría el look de todo lo ya guardado.
+  modules: ['checker', 'ring', 'solid'],
 
   // Contraste alto a propósito: empuja el campo hacia sus extremos, así quedan
   // masas grandes de sólido y de papel con la trama fina confinada a las

@@ -1,44 +1,55 @@
 # Pixelator
 
-Motor de composiciones generativas sobre un alfabeto de cuatro módulos. Cada celda de la grilla
-contiene exactamente un módulo; toda la riqueza sale de dónde se coloca cada uno, de qué tamaño y de
-qué color — nunca de introducir formas nuevas.
+Motor de composiciones generativas sobre un alfabeto cerrado de cinco siluetas. Cada celda de la
+grilla contiene exactamente un módulo; toda la riqueza sale de dónde se coloca cada uno, de qué
+tamaño y de qué color — nunca de introducir formas nuevas.
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Los cuatro módulos
+## El alfabeto
 
 Los PNG originales están en `tiles/`. Decodificados pixel a pixel resultaron ser, los cuatro, una
-subgrilla de 3×3 celdas de 22px en negro puro o transparente puro: sin grises, sin antialias, nada
-fuera de grilla.
+subgrilla de celdas en negro puro o transparente puro: sin grises, sin antialias, nada fuera de
+grilla. Eso permite tratarlos como máscaras de bits en vez de como imágenes.
+
+La subgrilla es de **5×5** y no de 3×3 como en los PNG originales. A 3×3 no hay píxeles para
+distinguir un círculo de un triángulo —los dos degeneran en el mismo borrón— y sin esa distinción el
+alfabeto no puede crecer. A 5×5 cada silueta se lee, y 25 bits todavía entran enteros en un `Uint32`.
 
 ```
- sólido        anillo      checker A     checker B
-   ###           ###          #.#           .#.
-   ###           #.#          .#.           #.#
-   ###           ###          #.#           .#.
-   9/9           8/9          5/9           4/9
+ checker A   checker B    anillo    triángulo   círculo    sólido
+   #.#.#       .#.#.      .###.       ..#..      .###.     #####
+   .#.#.       #.#.#      ##.##       .###.      #####     #####
+   #.#.#       .#.#.      #...#       .###.      #####     #####
+   .#.#.       #.#.#      ##.##       #####      #####     #####
+   #.#.#       .#.#.      .###.       #####      .###.     #####
+   13/25       12/25      16/25       17/25      21/25     25/25
 ```
 
-Eso permite tratarlos como máscaras de 9 bits en vez de como imágenes, y de ahí salen tres
-propiedades que con texturas habrían costado trabajo: la composición entera es un bitmap a 3× la
-resolución de la grilla, se amplía por vecino más cercano en múltiplos enteros —cero antialias, borde
-duro a cualquier zoom— y exportar a cualquier tamaño es exacto, no un reescalado.
+De ahí salen tres propiedades que con texturas habrían costado trabajo: la composición entera es un
+bitmap a 5× la resolución de la grilla, se amplía por vecino más cercano en múltiplos enteros —cero
+antialias, borde duro a cualquier zoom— y exportar a cualquier tamaño es exacto, no un reescalado.
+
+Las cinco siluetas se activan y desactivan por separado desde el panel. Apagar una no la reemplaza
+por nada: su tramo de la rampa lo reparten las vecinas, así que el mismo campo compone distinto sin
+tocar ningún otro parámetro. Con todo apagado el motor cae al sólido, que es el único piso posible.
 
 ## Dos cosas que el brief daba por sentadas y no eran
 
-**La rotación y el espejado no hacen nada.** Los cuatro módulos son simétricos bajo las ocho
-operaciones del grupo diedral: el anillo girado 90° es el anillo, el checker A espejado es el checker
-A. El eje existe en el modelo de datos pero no tiene efecto visual, así que no está expuesto en la UI.
-Si algún día entra un módulo asimétrico, funciona solo.
-
 **El eje expresivo real es la densidad de tinta.** Ordenados por cobertura, los módulos forman una
-rampa limpia — 1.00 → 0.89 → 0.56 → 0.44 → vacío — y esa rampa es el lenguaje de las referencias:
-masas sólidas que se disuelven en textura de anillos, después en trama de checkers, después en papel.
-Los dos checkers son complementos exactos, así que encajan formando una malla continua.
+rampa limpia — vacío → 0.50 → 0.64 → 0.68 → 0.84 → 1.00 — y esa rampa es el lenguaje de las
+referencias: masas sólidas que se disuelven en textura, después en trama de checkers, después en
+papel. Los dos checkers son complementos exactos y cuentan como una sola silueta: no se eligen por
+densidad —desperdiciaría que sean complementos— sino por paridad de celda, que es lo que los hace
+encajar formando una malla diagonal continua.
+
+**La rotación y el espejado casi no hacen nada.** Checker, anillo, círculo y sólido son simétricos
+bajo las ocho operaciones del grupo diedral: el anillo girado 90° es el anillo. El triángulo es la
+primera silueta asimétrica del sistema, así que es la primera para la que rotar tendría efecto
+visual. El eje no está expuesto en la UI todavía.
 
 ## Cómo funciona
 

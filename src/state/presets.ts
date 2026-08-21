@@ -99,6 +99,7 @@ export const BUILTIN: Preset[] = [
     builtin: true,
     params: {
       generator: 'noise',
+      modules: ['checker', 'ring', 'solid'],
       fieldScale: 2.5,
       octaves: 3,
       density: 0.5,
@@ -124,6 +125,7 @@ export const BUILTIN: Preset[] = [
     builtin: true,
     params: {
       generator: 'voronoi',
+      modules: ['checker', 'ring', 'solid'],
       fieldScale: 3.5,
       octaves: 3,
       density: 0.46,
@@ -151,6 +153,7 @@ export const BUILTIN: Preset[] = [
     builtin: true,
     params: {
       generator: 'ridged',
+      modules: ['checker', 'solid'],
       fieldScale: 4,
       octaves: 4,
       density: 0.52,
@@ -174,6 +177,7 @@ export const BUILTIN: Preset[] = [
     builtin: true,
     params: {
       generator: 'flow',
+      modules: ['checker', 'ring', 'triangle', 'solid'],
       fieldScale: 3,
       octaves: 3,
       density: 0.54,
@@ -200,6 +204,7 @@ export const BUILTIN: Preset[] = [
     builtin: true,
     params: {
       generator: 'distance',
+      modules: ['checker', 'ring', 'circle', 'solid'],
       fieldScale: 6,
       octaves: 2,
       attractors: 1,

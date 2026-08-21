@@ -18,7 +18,7 @@ import { Noise } from './noise'
 import { fold } from './symmetry'
 import { warp } from './distort'
 import { maskAt } from './mask'
-import { pickModule, EMPTY } from './modules'
+import { pickModule, buildRamp, EMPTY } from './modules'
 import { hash2, seedFromString, clamp, mix } from './rng'
 import {
   inkColor,
@@ -240,6 +240,10 @@ export function compose(p: Params, src: Source | null = null): Grid {
   const module = new Uint8Array(N)
   const ink = new Uint32Array(N)
 
+  // La rampa depende sólo de qué siluetas estén activadas, así que se compila
+  // una vez y no una por celda.
+  const ramp = buildRamp(p.modules)
+
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x
@@ -271,7 +275,7 @@ export function compose(p: Params, src: Source | null = null): Grid {
       const bayer = BAYER[(y & 3) * 4 + (x & 3)]
       const jitter = bayer + (hash2(x, y, seed) - bayer) * p.randomness
 
-      const id = pickModule(d, jitter, p.hardness, (x + y) & 1, p.coherence)
+      const id = pickModule(ramp, d, jitter, p.hardness, (x + y) & 1, p.coherence)
       module[i] = id
       if (id === EMPTY) continue
 

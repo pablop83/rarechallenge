@@ -7,6 +7,7 @@
 
 import { compose, gridFor } from './compose'
 import { rasterize, toCanvas } from './raster'
+import { RES } from './modules'
 import type { Source } from './source'
 import type { Params } from '../state/params'
 
@@ -21,8 +22,8 @@ export function exportOptions(
   const [gw, gh] = gridFor(p, source)
   const out: { px: number; w: number; h: number }[] = []
   for (const px of [1, 2, 4, 6, 8, 12, 16]) {
-    const w = gw * 3 * px
-    const h = gh * 3 * px
+    const w = gw * RES * px
+    const h = gh * RES * px
     if (Math.max(w, h) <= MAX_SIDE) out.push({ px, w, h })
   }
   return out

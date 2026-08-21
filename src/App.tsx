@@ -11,7 +11,8 @@ import {
   type Preset,
 } from './state/presets'
 import { Viewport } from './ui/Viewport'
-import { Group, Slider, Select, TextField, Check } from './ui/controls'
+import { Tabs, Section, Slider, Select, TextField, Check } from './ui/controls'
+import { ModulePicker } from './ui/ModulePicker'
 import { PaletteEditor } from './ui/PaletteEditor'
 import { PALETTES } from './engine/palette'
 import { exportOptions, exportPNG } from './engine/exporter'
@@ -24,6 +25,15 @@ import {
   type ExportProgress,
   type VideoFormat,
 } from './engine/videoExport'
+
+const TABS = [
+  ['origen', 'Origen'],
+  ['forma', 'Forma'],
+  ['color', 'Color'],
+  ['export', 'Export'],
+] as const
+
+type Tab = (typeof TABS)[number][0]
 
 const GENERATORS = [
   ['noise', 'Ruido fbm'],
@@ -75,6 +85,7 @@ const COLOR_MODES = [
 
 export default function App() {
   const [p, setP] = useState<Params>(DEFAULTS)
+  const [tab, setTab] = useState<Tab>('forma')
   const [source, setSource] = useState<Source | null>(null)
   const video = source instanceof VideoSource ? source : null
 
@@ -258,374 +269,433 @@ export default function App() {
       />
 
       <aside className="panel">
-        <header>
+        <div className="panel-head">
           <h1>Pixelator</h1>
-          <p>Composiciones generativas sobre cuatro módulos de 3×3.</p>
-        </header>
+          <p>Composiciones generativas sobre módulos de 5×5.</p>
+        </div>
 
-        <Group title="Origen">
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,video/*"
-            hidden
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) loadSource(f, f.name)
-              e.target.value = ''
-            }}
-          />
-          <div className="row">
-            <button onClick={() => fileRef.current?.click()}>
-              {source ? 'Cambiar' : 'Cargar imagen o video'}
-            </button>
-            {source && <button onClick={clearImage}>Quitar</button>}
-          </div>
-          {source && (
-            <>
-              <p className="note">
-                {source.width}×{source.height}
-                {video ? ` · ${video.duration.toFixed(1)}s` : ''} · no sale de tu máquina
-              </p>
+        <Tabs value={tab} options={TABS} onChange={setTab} />
 
-              {video && (
-                <>
-                  <div className="row">
-                    <button
-                      onClick={() => {
-                        if (video.playing) video.pause()
-                        else video.play()
-                        setPlaying(!video.playing)
-                      }}
-                    >
-                      {playing ? '❚❚ Pausa' : '▶ Reproducir'}
-                    </button>
-                  </div>
-                  <Slider
-                    label="Posición"
-                    value={Math.min(tNow, video.duration)}
-                    min={0}
-                    max={video.duration}
-                    step={0.02}
-                    onChange={(v) => {
-                      video.pause()
-                      setPlaying(false)
-                      setTNow(v)
-                      void video.seek(v)
+        {/* ---------------------------------------------------------------- */}
+        {tab === 'origen' && (
+          <>
+            <Section id="fuente" title="Imagen o video">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,video/*"
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) loadSource(f, f.name)
+                  e.target.value = ''
+                }}
+              />
+              <div className="row">
+                <button onClick={() => fileRef.current?.click()}>
+                  {source ? 'Cambiar' : 'Cargar archivo'}
+                </button>
+                {source && <button onClick={clearImage}>Quitar</button>}
+              </div>
+              {source ? (
+                <p className="note" style={{ marginTop: 10 }}>
+                  {source.width}×{source.height}
+                  {video ? ` · ${video.duration.toFixed(1)}s` : ''} · no sale de tu máquina
+                </p>
+              ) : (
+                <p className="note" style={{ marginTop: 10 }}>
+                  Arrastrá al lienzo o pegá con ⌘V. Sin archivo, el campo procedural
+                  compone solo.
+                </p>
+              )}
+            </Section>
+
+            {video && (
+              <Section id="reproduccion" title="Reproducción">
+                <div className="row" style={{ marginBottom: 11 }}>
+                  <button
+                    onClick={() => {
+                      if (video.playing) video.pause()
+                      else video.play()
+                      setPlaying(!video.playing)
                     }}
-                  />
-                  <Slider
-                    label="Entrada"
-                    value={range[0]}
-                    min={0}
-                    max={video.duration}
-                    step={0.05}
-                    onChange={(v) => setRange(([, b]) => [Math.min(v, b - 0.1), b])}
-                  />
-                  <Slider
-                    label="Salida"
-                    value={range[1]}
-                    min={0}
-                    max={video.duration}
-                    step={0.05}
-                    onChange={(v) => setRange(([a]) => [a, Math.max(v, a + 0.1)])}
+                  >
+                    {playing ? '❚❚ Pausa' : '▶ Reproducir'}
+                  </button>
+                </div>
+                <Slider
+                  label="Posición"
+                  value={Math.min(tNow, video.duration)}
+                  min={0}
+                  max={video.duration}
+                  step={0.02}
+                  onChange={(v) => {
+                    video.pause()
+                    setPlaying(false)
+                    setTNow(v)
+                    void video.seek(v)
+                  }}
+                />
+                <Slider
+                  label="Entrada"
+                  value={range[0]}
+                  min={0}
+                  max={video.duration}
+                  step={0.05}
+                  onChange={(v) => setRange(([, b]) => [Math.min(v, b - 0.1), b])}
+                />
+                <Slider
+                  label="Salida"
+                  value={range[1]}
+                  min={0}
+                  max={video.duration}
+                  step={0.05}
+                  onChange={(v) => setRange(([a]) => [a, Math.max(v, a + 0.1)])}
+                />
+              </Section>
+            )}
+
+            {source && (
+              <Section id="ajuste-foto" title="Ajuste de la fuente">
+                <Slider label="Influencia" value={p.imageAmount} min={0} max={1} onChange={set('imageAmount')} />
+                <Slider label="Tono → bordes" value={p.imageEdges} min={0} max={1} onChange={set('imageEdges')} />
+                <Slider label="Brillo" value={p.imageBrightness} min={-0.5} max={0.5} onChange={set('imageBrightness')} />
+                <Slider label="Contraste" value={p.imageContrast} min={0.2} max={4} step={0.05} onChange={set('imageContrast')} />
+                <Check label="Invertir" value={p.imageInvert} onChange={set('imageInvert')} />
+              </Section>
+            )}
+
+            <Section id="presets" title="Presets">
+              <input
+                ref={presetFileRef}
+                type="file"
+                accept="application/json"
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) doImport(f)
+                  e.target.value = ''
+                }}
+              />
+              <label className="ctrl">
+                <span className="ctrl-label">Aplicar</span>
+                <div className="select-wrap">
+                  <select value={picked} onChange={(e) => pick(e.target.value)}>
+                    <option value="">—</option>
+                    <optgroup label="De fábrica">
+                      {BUILTIN.map((x) => (
+                        <option key={x.name} value={x.name}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    {saved.length > 0 && (
+                      <optgroup label="Tuyos">
+                        {saved.map((x) => (
+                          <option key={x.name} value={x.name}>
+                            {x.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                  <svg className="chev sm" viewBox="0 0 12 12" aria-hidden="true">
+                    <path d="M3 5 L6 8 L9 5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                </div>
+              </label>
+
+              <TextField
+                label="Guardar como"
+                value={presetName}
+                onChange={setPresetName}
+                placeholder="nombre"
+                after={
+                  <button className="mini" onClick={storePreset} disabled={!presetName.trim()}>
+                    ✓
+                  </button>
+                }
+              />
+              <Check
+                label="Incluir semilla y formato"
+                value={withComposition}
+                onChange={setWithComposition}
+              />
+              <div className="row">
+                <button onClick={() => presetFileRef.current?.click()}>Importar</button>
+                <button onClick={() => exportPresets(saved)} disabled={saved.length === 0}>
+                  Exportar
+                </button>
+                {isSaved && <button onClick={removePreset}>Borrar</button>}
+              </div>
+              <p className="note" style={{ marginTop: 10, marginBottom: 0 }}>
+                Un preset guarda parámetros, no la imagen.
+              </p>
+            </Section>
+          </>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {tab === 'forma' && (
+          <>
+            <Section id="lienzo" title="Lienzo">
+              <TextField
+                label="Seed"
+                value={p.seed}
+                onChange={set('seed')}
+                after={
+                  <button className="mini" onClick={reseed} title="Nueva semilla">
+                    ↻
+                  </button>
+                }
+              />
+              <Slider
+                label="Grilla (lado mayor)"
+                value={p.grid}
+                min={20}
+                max={320}
+                step={4}
+                onChange={set('grid')}
+              />
+              <Select label="Proporción" value={p.aspect} options={ASPECT_LABELS} onChange={set('aspect')} />
+              {source && p.aspect !== 'auto' && (
+                <Select
+                  label="Encaje de la foto"
+                  value={p.fit}
+                  options={FITS}
+                  onChange={set('fit') as (v: Fit) => void}
+                />
+              )}
+            </Section>
+
+            <Section id="modulos" title="Módulos" aside={`${p.modules.length}/5`}>
+              <ModulePicker value={p.modules} onChange={set('modules')} />
+              <p className="note">
+                El alfabeto. Cada silueta ocupa un tramo de la rampa de densidad según
+                cuánta tinta cubre; apagar una hace que su tramo lo repartan las vecinas.
+              </p>
+              <Slider
+                label="Escala mínima"
+                value={p.minScale}
+                min={1}
+                max={4}
+                step={1}
+                onChange={(v) =>
+                  setP((prev) => ({ ...prev, minScale: v, maxScale: Math.max(prev.maxScale, v) }))
+                }
+              />
+              <Slider
+                label="Escala máxima"
+                value={p.maxScale}
+                min={1}
+                max={4}
+                step={1}
+                onChange={(v) =>
+                  setP((prev) => ({ ...prev, maxScale: v, minScale: Math.min(prev.minScale, v) }))
+                }
+              />
+              {p.minScale > 1 && (
+                <p className="note">
+                  Unidad {p.minScale}×{p.minScale}. Las escalas mayores son múltiplos suyos.
+                </p>
+              )}
+              <Slider label="Cantidad de escala" value={p.scaleAmount} min={0} max={1} onChange={set('scaleAmount')} />
+              <Slider label="Exige planicie" value={p.scaleFlatness} min={0} max={1} onChange={set('scaleFlatness')} />
+            </Section>
+
+            <Section id="campo" title="Campo">
+              <Select label="Generador" value={p.generator} options={GENERATORS} onChange={set('generator')} />
+              <Slider label="Escala" value={p.fieldScale} min={0.5} max={16} step={0.1} onChange={set('fieldScale')} />
+              <Slider label="Octavas" value={p.octaves} min={1} max={7} step={1} onChange={set('octaves')} />
+              {(p.generator === 'distance' || p.generator === 'voronoi') && (
+                <Slider label="Atractores" value={p.attractors} min={1} max={12} step={1} onChange={set('attractors')} />
+              )}
+            </Section>
+
+            <Section id="densidad" title="Densidad">
+              <Slider label="Densidad" value={p.density} min={0} max={1} onChange={set('density')} />
+              <Slider label="Contraste" value={p.contrast} min={0.2} max={5} step={0.05} onChange={set('contrast')} />
+              <Slider label="Dureza" value={p.hardness} min={0} max={1} onChange={set('hardness')} />
+              <Slider label="Trama → ruido" value={p.randomness} min={0} max={1} onChange={set('randomness')} />
+              <Slider label="Coherencia" value={p.coherence} min={0} max={1} onChange={set('coherence')} />
+            </Section>
+
+            <Section id="geometria" title="Geometría" defaultOpen={false}>
+              <Select label="Simetría" value={p.symmetry} options={SYMMETRIES} onChange={set('symmetry')} />
+              <Select label="Distorsión" value={p.distortion} options={DISTORTIONS} onChange={set('distortion')} />
+              {p.distortion !== 'none' && (
+                <Slider label="Fuerza" value={p.distortStrength} min={0} max={1} onChange={set('distortStrength')} />
+              )}
+              <Select label="Máscara" value={p.mask} options={MASKS} onChange={set('mask')} />
+              {p.mask !== 'none' && (
+                <>
+                  <Slider label="Tamaño" value={p.maskSize} min={0.1} max={1.4} onChange={set('maskSize')} />
+                  <Slider label="Difuminado" value={p.maskFeather} min={0.01} max={0.6} onChange={set('maskFeather')} />
+                </>
+              )}
+            </Section>
+          </>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {tab === 'color' && (
+          <>
+            <Section id="color" title="Tintas">
+              <Select label="Modo" value={p.colorMode} options={COLOR_MODES} onChange={set('colorMode')} />
+              {isDuo ? (
+                <div className="row">
+                  <label className="swatch">
+                    Tinta
+                    <input type="color" value={p.ink} onChange={(e) => set('ink')(e.target.value)} />
+                  </label>
+                  <label className="swatch">
+                    Papel
+                    <input type="color" value={p.paper} onChange={(e) => set('paper')(e.target.value)} />
+                  </label>
+                </div>
+              ) : (
+                <>
+                  <Select label="Paleta" value={p.palette} options={PALETTE_OPTS} onChange={set('palette')} />
+                  <Slider label="Escala de color" value={p.colorScale} min={0.5} max={16} step={0.1} onChange={set('colorScale')} />
+                  <Slider label="Agrupamiento" value={p.colorClustering} min={0} max={1} onChange={set('colorClustering')} />
+                  <PaletteEditor
+                    paletteKey={p.palette}
+                    onSelect={set('palette')}
+                    onChange={touchPalettes}
                   />
                 </>
               )}
-              <Slider label="Influencia" value={p.imageAmount} min={0} max={1} onChange={set('imageAmount')} />
-              <Slider label="Tono → bordes" value={p.imageEdges} min={0} max={1} onChange={set('imageEdges')} />
-              <Slider label="Brillo" value={p.imageBrightness} min={-0.5} max={0.5} onChange={set('imageBrightness')} />
-              <Slider label="Contraste" value={p.imageContrast} min={0.2} max={4} step={0.05} onChange={set('imageContrast')} />
-              <Check label="Invertir" value={p.imageInvert} onChange={set('imageInvert')} />
-              <Slider label="Color de la foto" value={p.imageColorAmount} min={0} max={1} onChange={set('imageColorAmount')} />
-              <Slider label="Real → paleta" value={p.imageColorQuantize} min={0} max={1} onChange={set('imageColorQuantize')} />
-            </>
-          )}
-        </Group>
+            </Section>
 
-        <Group title="Presets">
-          <input
-            ref={presetFileRef}
-            type="file"
-            accept="application/json"
-            hidden
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) doImport(f)
-              e.target.value = ''
-            }}
-          />
-          <label className="ctrl">
-            <span className="ctrl-label">Aplicar</span>
-            <select value={picked} onChange={(e) => pick(e.target.value)}>
-              <option value="">—</option>
-              <optgroup label="De fábrica">
-                {BUILTIN.map((x) => (
-                  <option key={x.name} value={x.name}>
-                    {x.name}
-                  </option>
-                ))}
-              </optgroup>
-              {saved.length > 0 && (
-                <optgroup label="Tuyos">
-                  {saved.map((x) => (
-                    <option key={x.name} value={x.name}>
-                      {x.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </label>
+            {source && !isDuo && (
+              <Section id="color-foto" title="Color de la fuente">
+                <Slider label="Influencia" value={p.imageColorAmount} min={0} max={1} onChange={set('imageColorAmount')} />
+                <Slider label="Real → paleta" value={p.imageColorQuantize} min={0} max={1} onChange={set('imageColorQuantize')} />
+              </Section>
+            )}
+          </>
+        )}
 
-          <TextField
-            label="Guardar como"
-            value={presetName}
-            onChange={setPresetName}
-            after={
-              <button className="mini" onClick={storePreset} disabled={!presetName.trim()}>
-                ✓
-              </button>
-            }
-          />
-          <Check
-            label="Incluir semilla y formato"
-            value={withComposition}
-            onChange={setWithComposition}
-          />
-          <div className="row">
-            <button onClick={() => presetFileRef.current?.click()}>Importar</button>
-            <button onClick={() => exportPresets(saved)} disabled={saved.length === 0}>
-              Exportar
-            </button>
-            {isSaved && <button onClick={removePreset}>Borrar</button>}
-          </div>
-          <p className="note">Un preset guarda parámetros, no la imagen.</p>
-        </Group>
-
-        <Group title="Lienzo">
-          <TextField
-            label="Seed"
-            value={p.seed}
-            onChange={set('seed')}
-            after={
-              <button className="mini" onClick={reseed}>
-                ↻
-              </button>
-            }
-          />
-          <Slider
-            label="Grilla (lado mayor)"
-            value={p.grid}
-            min={20}
-            max={320}
-            step={4}
-            onChange={set('grid')}
-          />
-          <Select label="Proporción" value={p.aspect} options={ASPECT_LABELS} onChange={set('aspect')} />
-          {source && p.aspect !== 'auto' && (
-            <Select
-              label="Encaje de la foto"
-              value={p.fit}
-              options={FITS}
-              onChange={set('fit') as (v: Fit) => void}
-            />
-          )}
-        </Group>
-
-        <Group title="Campo">
-          <Select label="Generador" value={p.generator} options={GENERATORS} onChange={set('generator')} />
-          <Slider label="Escala" value={p.fieldScale} min={0.5} max={16} step={0.1} onChange={set('fieldScale')} />
-          <Slider label="Octavas" value={p.octaves} min={1} max={7} step={1} onChange={set('octaves')} />
-          {(p.generator === 'distance' || p.generator === 'voronoi') && (
-            <Slider label="Atractores" value={p.attractors} min={1} max={12} step={1} onChange={set('attractors')} />
-          )}
-        </Group>
-
-        <Group title="Densidad">
-          <Slider label="Densidad" value={p.density} min={0} max={1} onChange={set('density')} />
-          <Slider label="Contraste" value={p.contrast} min={0.2} max={5} step={0.05} onChange={set('contrast')} />
-          <Slider label="Dureza" value={p.hardness} min={0} max={1} onChange={set('hardness')} />
-          <Slider label="Trama → ruido" value={p.randomness} min={0} max={1} onChange={set('randomness')} />
-          <Slider label="Coherencia" value={p.coherence} min={0} max={1} onChange={set('coherence')} />
-        </Group>
-
-        <Group title="Escala de módulo">
-          <Slider
-            label="Mínima"
-            value={p.minScale}
-            min={1}
-            max={4}
-            step={1}
-            onChange={(v) =>
-              setP((prev) => ({ ...prev, minScale: v, maxScale: Math.max(prev.maxScale, v) }))
-            }
-          />
-          <Slider
-            label="Máxima"
-            value={p.maxScale}
-            min={1}
-            max={4}
-            step={1}
-            onChange={(v) =>
-              setP((prev) => ({ ...prev, maxScale: v, minScale: Math.min(prev.minScale, v) }))
-            }
-          />
-          {p.minScale > 1 && (
-            <p className="note">
-              Unidad {p.minScale}×{p.minScale}. Las escalas mayores son múltiplos suyos.
-            </p>
-          )}
-          <Slider label="Cantidad" value={p.scaleAmount} min={0} max={1} onChange={set('scaleAmount')} />
-          <Slider label="Exige planicie" value={p.scaleFlatness} min={0} max={1} onChange={set('scaleFlatness')} />
-        </Group>
-
-        <Group title="Geometría">
-          <Select label="Simetría" value={p.symmetry} options={SYMMETRIES} onChange={set('symmetry')} />
-          <Select label="Distorsión" value={p.distortion} options={DISTORTIONS} onChange={set('distortion')} />
-          {p.distortion !== 'none' && (
-            <Slider label="Fuerza" value={p.distortStrength} min={0} max={1} onChange={set('distortStrength')} />
-          )}
-          <Select label="Máscara" value={p.mask} options={MASKS} onChange={set('mask')} />
-          {p.mask !== 'none' && (
-            <>
-              <Slider label="Tamaño" value={p.maskSize} min={0.1} max={1.4} onChange={set('maskSize')} />
-              <Slider label="Difuminado" value={p.maskFeather} min={0.01} max={0.6} onChange={set('maskFeather')} />
-            </>
-          )}
-        </Group>
-
-        <Group title="Color">
-          <Select label="Modo" value={p.colorMode} options={COLOR_MODES} onChange={set('colorMode')} />
-          {isDuo ? (
-            <div className="row">
-              <label className="swatch">
-                Tinta
-                <input type="color" value={p.ink} onChange={(e) => set('ink')(e.target.value)} />
+        {/* ---------------------------------------------------------------- */}
+        {tab === 'export' && (
+          <>
+            <Section id="export-png" title="PNG">
+              <label className="ctrl">
+                <span className="ctrl-label">Resolución</span>
+                <div className="select-wrap">
+                  <select value={exportPx} onChange={(e) => setExportPx(parseInt(e.target.value))}>
+                    {opts.map((o) => (
+                      <option key={o.px} value={o.px}>
+                        {o.w} × {o.h} px
+                      </option>
+                    ))}
+                  </select>
+                  <svg className="chev sm" viewBox="0 0 12 12" aria-hidden="true">
+                    <path d="M3 5 L6 8 L9 5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                </div>
               </label>
-              <label className="swatch">
-                Papel
-                <input type="color" value={p.paper} onChange={(e) => set('paper')(e.target.value)} />
-              </label>
-            </div>
-          ) : (
-            <>
-              <Select label="Paleta" value={p.palette} options={PALETTE_OPTS} onChange={set('palette')} />
-              <Slider label="Escala de color" value={p.colorScale} min={0.5} max={16} step={0.1} onChange={set('colorScale')} />
-              <Slider label="Agrupamiento" value={p.colorClustering} min={0} max={1} onChange={set('colorClustering')} />
-              <PaletteEditor
-                paletteKey={p.palette}
-                onSelect={set('palette')}
-                onChange={touchPalettes}
-              />
-            </>
-          )}
-        </Group>
+              <Check label="Fondo transparente" value={transparent} onChange={setTransparent} />
+              <button className="primary" onClick={doExport} disabled={busy}>
+                {busy ? 'Generando…' : 'Exportar PNG'}
+              </button>
+            </Section>
 
-        <Group title="Export">
-          <label className="ctrl">
-            <span className="ctrl-label">Resolución</span>
-            <select value={exportPx} onChange={(e) => setExportPx(parseInt(e.target.value))}>
-              {opts.map((o) => (
-                <option key={o.px} value={o.px}>
-                  {o.w} × {o.h} px
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={transparent}
-              onChange={(e) => setTransparent(e.target.checked)}
-            />
-            Fondo transparente
-          </label>
-          <button className="primary" onClick={doExport} disabled={busy}>
-            {busy ? 'Generando…' : 'Exportar PNG'}
-          </button>
-        </Group>
+            {video ? (
+              <Section id="export-video" title="Video">
+                <Select
+                  label="Formato"
+                  value={vFormat}
+                  options={
+                    [
+                      ['webm', 'WebM / VP9 — recomendado'],
+                      ['mp4', 'MP4 / H.264 — compatibilidad'],
+                    ] as const
+                  }
+                  onChange={setVFormat}
+                />
+                <Select
+                  label="Cuadros por segundo"
+                  value={String(vFps)}
+                  options={[
+                    ['30', '30 fps'],
+                    ['60', '60 fps'],
+                  ]}
+                  onChange={(v) => setVFps(Number(v) as 30 | 60)}
+                />
+                <label className="ctrl">
+                  <span className="ctrl-label">Resolución</span>
+                  <div className="select-wrap">
+                    <select value={vPx} onChange={(e) => setVPx(Number(e.target.value))}>
+                      {videoOpts.map((o) => (
+                        <option key={o.px} value={o.px}>
+                          {o.w} × {o.h} px{o.px < MIN_SAFE_PX ? '  ⚠' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <svg className="chev sm" viewBox="0 0 12 12" aria-hidden="true">
+                      <path d="M3 5 L6 8 L9 5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                    </svg>
+                  </div>
+                </label>
 
-        {video && (
-          <Group title="Export de video">
-            <Select
-              label="Formato"
-              value={vFormat}
-              options={
-                [
-                  ['webm', 'WebM / VP9 — recomendado'],
-                  ['mp4', 'MP4 / H.264 — compatibilidad'],
-                ] as const
-              }
-              onChange={setVFormat}
-            />
-            <Select
-              label="Cuadros por segundo"
-              value={String(vFps)}
-              options={[
-                ['30', '30 fps'],
-                ['60', '60 fps'],
-              ]}
-              onChange={(v) => setVFps(Number(v) as 30 | 60)}
-            />
-            <label className="ctrl">
-              <span className="ctrl-label">Resolución</span>
-              <select value={vPx} onChange={(e) => setVPx(Number(e.target.value))}>
-                {videoOpts.map((o) => (
-                  <option key={o.px} value={o.px}>
-                    {o.w} × {o.h} px{o.px < MIN_SAFE_PX ? '  ⚠' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {tooSmall && (
+                  <p className="warn">
+                    A {vPx}px por subcelda la trama se pierde: ningún codec puede con un
+                    damero de ese tamaño y el resultado sale gris.
+                    {safest && ` Usá ${safest.w}×${safest.h} o más.`}
+                  </p>
+                )}
 
-            {tooSmall && (
-              <p className="warn">
-                A {vPx}px por subcelda la trama se pierde: ningún codec puede con un
-                damero de ese tamaño y el resultado sale gris.
-                {safest && ` Usá ${safest.w}×${safest.h} o más.`}
-              </p>
-            )}
+                <Slider
+                  label="Bitrate (Mbps)"
+                  value={vBitrate}
+                  min={5}
+                  max={80}
+                  step={1}
+                  onChange={setVBitrate}
+                />
 
-            <Slider
-              label="Bitrate (Mbps)"
-              value={vBitrate}
-              min={5}
-              max={80}
-              step={1}
-              onChange={setVBitrate}
-            />
+                {vFormat === 'mp4' && (
+                  <p className="warn">
+                    MP4 se graba en tiempo real: si componer no llega a {vFps} fps, el video
+                    sale más largo y lento. WebM no tiene ese problema.
+                  </p>
+                )}
+                {vFormat === 'webm' && !isWebCodecsAvailable() && (
+                  <p className="warn">
+                    Este navegador no tiene WebCodecs; se usará la ruta en tiempo real.
+                  </p>
+                )}
 
-            {vFormat === 'mp4' && (
-              <p className="warn">
-                MP4 se graba en tiempo real: si componer no llega a {vFps} fps, el video
-                sale más largo y lento. WebM no tiene ese problema.
-              </p>
-            )}
-            {vFormat === 'webm' && !isWebCodecsAvailable() && (
-              <p className="warn">Este navegador no tiene WebCodecs; se usará la ruta en tiempo real.</p>
-            )}
-
-            <p className="note">
-              {Math.max(1, Math.round((range[1] - range[0]) * vFps))} cuadros ·{' '}
-              {(range[1] - range[0]).toFixed(1)}s
-              {chosen ? ` · ${chosen.w}×${chosen.h}` : ''}
-            </p>
-
-            {prog ? (
-              <>
                 <p className="note">
-                  Cuadro {prog.frame} de {prog.total}
-                  {prog.realFps ? ` · ${prog.realFps.toFixed(1)} fps reales` : ''}
+                  {Math.max(1, Math.round((range[1] - range[0]) * vFps))} cuadros ·{' '}
+                  {(range[1] - range[0]).toFixed(1)}s
+                  {chosen ? ` · ${chosen.w}×${chosen.h}` : ''}
                 </p>
-                <button onClick={() => abortRef.current?.abort()}>Cancelar</button>
-              </>
+
+                {prog ? (
+                  <>
+                    <p className="note">
+                      Cuadro {prog.frame} de {prog.total}
+                      {prog.realFps ? ` · ${prog.realFps.toFixed(1)} fps reales` : ''}
+                    </p>
+                    <div className="row">
+                      <button onClick={() => abortRef.current?.abort()}>Cancelar</button>
+                    </div>
+                  </>
+                ) : (
+                  <button className="primary" onClick={doExportVideo}>
+                    Exportar video
+                  </button>
+                )}
+              </Section>
             ) : (
-              <button className="primary" onClick={doExportVideo}>
-                Exportar video
-              </button>
+              <p className="note" style={{ padding: '0 8px' }}>
+                Cargá un video en Origen para exportar en movimiento.
+              </p>
             )}
-          </Group>
+          </>
         )}
       </aside>
     </div>

@@ -1,7 +1,7 @@
 /**
- * Rasterizador. Como cada módulo es una máscara de 3x3 bits, la composición
- * entera es un bitmap a 3x la resolución de la grilla: una grilla de 300 son
- * 900x900 píxeles y se escribe de una pasada en un Uint32Array.
+ * Rasterizador. Como cada módulo es una máscara de RES×RES bits, la composición
+ * entera es un bitmap a RES× la resolución de la grilla: una grilla de 300 son
+ * 1500x1500 píxeles y se escribe de una pasada en un Uint32Array.
  *
  * De ahí salen las tres propiedades que pedía el brief y que con texturas
  * habrían costado trabajo: cero antialias (nunca se interpola nada), bordes
@@ -9,7 +9,7 @@
  * enteros) y export a cualquier tamaño (subir `px` es exacto, no un reescalado).
  */
 
-import { MODULE_BITS, EMPTY } from './modules'
+import { MODULE_BITS, EMPTY, RES } from './modules'
 import type { Grid } from './compose'
 
 export interface Bitmap {
@@ -19,12 +19,12 @@ export interface Bitmap {
 }
 
 /**
- * Dibuja la grilla en un Uint32Array de `w*3*px` por `h*3*px`.
+ * Dibuja la grilla en un Uint32Array de `w*RES*px` por `h*RES*px`.
  * `px` es el tamaño en píxeles de cada subcelda del módulo.
  */
 export function rasterize(g: Grid, px: number): Bitmap {
-  const w = g.w * 3 * px
-  const h = g.h * 3 * px
+  const w = g.w * RES * px
+  const h = g.h * RES * px
   const buf = new Uint32Array(w * h)
 
   if (g.paper !== 0) buf.fill(g.paper)
@@ -41,15 +41,15 @@ export function rasterize(g: Grid, px: number): Bitmap {
       const bits = MODULE_BITS[id]
       const color = g.ink[i]
 
-      // Un módulo de escala s ocupa s celdas, así que cada una de sus tres
+      // Un módulo de escala s ocupa s celdas, así que cada una de sus RES
       // divisiones mide s * px píxeles.
       const cell = s * px
-      const ox = x * 3 * px
-      const oy = y * 3 * px
+      const ox = x * RES * px
+      const oy = y * RES * px
 
-      for (let row = 0; row < 3; row++) {
-        for (let col = 0; col < 3; col++) {
-          if (!((bits >> (row * 3 + col)) & 1)) continue
+      for (let row = 0; row < RES; row++) {
+        for (let col = 0; col < RES; col++) {
+          if (!((bits >> (row * RES + col)) & 1)) continue
 
           const x0 = ox + col * cell
           const y0 = oy + row * cell

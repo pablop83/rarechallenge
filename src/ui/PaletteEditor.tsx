@@ -118,6 +118,7 @@ export function PaletteEditor({
         label="Duplicar como"
         value={dupName}
         onChange={setDupName}
+        placeholder="nombre de la copia"
         after={
           <button
             className="mini"
